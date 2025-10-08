@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analyseur de Moments Critiques PGN</title>
+    <!-- CSS de chessboard.js pour afficher les échiquiers -->
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <!-- Un peu de style pour rendre la page plus jolie -->
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; margin: 2em; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: #2c3e50; }
+        form { margin-bottom: 2em; }
+        .result-item { display: flex; align-items: flex-start; gap: 20px; border-top: 1px solid #ddd; padding-top: 20px; margin-top: 20px; }
+        .board-container { width: 300px; flex-shrink: 0; }
+        .info-container { flex-grow: 1; }
+        .info-container table { width: 100%; border-collapse: collapse; }
+        .info-container th, .info-container td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; }
+        .info-container th { background-color: #f9f9f9; }
+        .error { color: #e74c3c; font-weight: bold; }
+        .progress-container { margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; display: none; }
+        .progress-bar { width: 100%; height: 20px; background: #e9ecef; border-radius: 10px; overflow: hidden; }
+        .progress-fill { height: 100%; background: #28a745; transition: width 0.3s ease; }
+        .progress-text { margin-top: 10px; text-align: center; font-weight: bold; }
+        .game-section { margin: 30px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #007bff; }
+        .game-header { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #dee2e6; }
+        .game-title { color: #007bff; font-size: 1.2em; font-weight: bold; margin-bottom: 5px; }
+        .game-info { color: #6c757d; font-size: 0.9em; }
+        .no-moments { color: #6c757d; font-style: italic; text-align: center; padding: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Analyseur de Moments Critiques PGN</h1>
+        <p>Uploadez un fichier .pgn contenant une ou plusieurs parties.</p>
+        
+        <form method="post" enctype="multipart/form-data">
+            <input type="file" name="file" accept=".pgn" required>
+            <button type="submit">Analyser</button>
+        </form>
+
+        <!-- Barre de progression -->
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+            <div class="progress-text" id="progressText">Préparation de l'analyse...</div>
+        </div>
+
+        {% if error %}
+            <div class="error">
+                <h2>Erreur :</h2>
+                <p>{{ error }}</p>
+            </div>
+        {% endif %}
+
+        {% if results %}
+            <h2>Résultats pour : {{ filename }}</h2>
+            {% if results is string %}
+                <p>{{ results }}</p>
+            {% elif results|length == 0 %}
+                <p>Aucun moment critique (avec un seuil de {{ (EVAL_DIFFERENCE_THRESHOLD / 100.0)|round(2) }} pions) n'a été trouvé dans ce fichier.</p>
+            {% else %}
+                {% for game in results %}
+                <div class="game-section">
+                    <div class="game-header">
+                        <div class="game-title">Partie {{ game.game_number }} : {{ game.white }} vs {{ game.black }}</div>
+                        <div class="game-info">
+                            <strong>Résultat :</strong> {{ game.result }} | 
+                            <strong>Date :</strong> {{ game.date }} | 
+                            <strong>Événement :</strong> {{ game.event }}
+                        </div>
+                    </div>
+                    
+                    {% if game.critical_moments|length == 0 %}
+                        <div class="no-moments">
+                            Aucun moment critique trouvé dans cette partie (seuil de {{ (EVAL_DIFFERENCE_THRESHOLD / 100.0)|round(2) }})
+                        </div>
+                    {% else %}
+                        <p><strong>{{ game.critical_moments|length }} moment(s) critique(s) trouvé(s)</strong></p>
+                        {% for result in game.critical_moments %}
+                        <div class="result-item">
+                            <div class="board-container" id="board{{ game.game_number }}_{{ loop.index }}" data-fen="{{ result.fen }}"></div>
+                            <div class="info-container">
+                                <h3>Tour {{ result.move_number }} (Trait aux {{ result.turn }})</h3>
+                                <div style="background: #e8f5e8; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                                    <strong>🎯 Moment critique détecté !</strong><br>
+                                </div>
+                                <table>
+                                    <tr>
+                                        <th>Coup</th>
+                                        <th>Évaluation</th>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>{{ result.best_move }}</strong></td>
+                                        <td><strong>{{ result.best_move_eval }}</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td>{{ result.second_best_move }}</td>
+                                        <td>{{ result.second_best_move_eval }}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endif %}
+    </div>
+
+    <!-- Scripts pour afficher les échiquiers -->
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script>
+        // Ce script s'exécute après le chargement de la page
+        $(document).ready(function() {
+            // Pour chaque échiquier que nous avons créé dans la boucle
+            $('[id^=board]').each(function() {
+                var fen = $(this).data('fen'); // On récupère la position FEN
+                var boardId = $(this).attr('id'); // On récupère l'ID du div
+                // On crée un échiquier interactif dans ce div
+                var board = Chessboard(boardId, {
+                    position: fen,
+                    pieceTheme: '{{ url_for("static", filename="img/chesspieces/wikipedia/") }}{piece}.png',
+                    draggable: false // On ne peut pas bouger les pièces
+                });
+            });
+
+            // Gestion de la barre de progression
+            {% if analysis_id %}
+            var analysisId = '{{ analysis_id }}';
+            var progressContainer = $('#progressContainer');
+            var progressFill = $('#progressFill');
+            var progressText = $('#progressText');
+            
+            // Afficher la barre de progression
+            progressContainer.show();
+            
+            // Fonction pour mettre à jour la progression
+            function updateProgress() {
+                $.get('/progress/' + analysisId)
+                    .done(function(data) {
+                        if (data.status === 'analyzing' || data.status === 'starting') {
+                            progressFill.css('width', data.progress + '%');
+                            progressText.text('Analyse en cours... ' + data.current_move + '/' + data.total_moves + ' coups (' + data.progress + '%)');
+                            
+                            // Continuer à vérifier la progression
+                            setTimeout(updateProgress, 500);
+                        } else if (data.status === 'completed') {
+                            progressFill.css('width', '100%');
+                            progressText.text('Analyse terminée ! Redirection...');
+                            
+                            // Rediriger vers les résultats après un court délai
+                            setTimeout(function() {
+                                window.location.href = '/results/' + analysisId;
+                            }, 1000);
+                        } else if (data.error) {
+                            progressText.text('Erreur: ' + data.error);
+                            progressFill.css('background', '#dc3545');
+                        }
+                    })
+                    .fail(function() {
+                        progressText.text('Erreur de connexion');
+                        progressFill.css('background', '#dc3545');
+                    });
+            }
+            
+            // Démarrer la surveillance de la progression
+            updateProgress();
+            {% endif %}
+        });
+    </script>
+</body>
+</html>
