@@ -11,7 +11,8 @@ import chess.engine
 import chess.pgn
 
 # --- CONFIGURATION ---
-STOCKFISH_PATH = "stockfish/stockfish-macos-m1-apple-silicon"
+# STOCKFISH_PATH = "stockfish/stockfish-macos-m1-apple-silicon"
+STOCKFISH_PATH = "stockfish_linux/stockfish-ubuntu-x86-64-avx2"
 
 UPLOAD_FOLDER = "uploads"
 ALLOWED_EXTENSIONS = {"pgn"}
